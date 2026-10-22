@@ -1,0 +1,48 @@
+name: Aplicar tipo de endereco
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  aplicar:
+    if: ${{ !contains(github.event.head_commit.message, '[tipo-endereco-aplicado]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restaurar e atualizar index
+        run: |
+          git show 2dbc514b58883ecb27f40011b3577032759117d1:index.html > index.html
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          s=s.replace('<th>Posição</th><th>Edifício</th><th>Status</th><th>Prioridade</th><th>Capacidade</th><th>Ações</th>','<th>Posição</th><th>Edifício</th><th>Tipo</th><th>Status</th><th>Prioridade</th><th>Capacidade</th><th>Ações</th>')
+          s=s.replace('<div class="field"><label>Edifício</label><input id="eEd"></div><div class="field"><label>Capacidade</label>','<div class="field"><label>Edifício</label><input id="eEd"></div><div class="field"><label>Tipo de endereço *</label><select id="eTipo"><option value="ESTOQUE">ESTOQUE</option><option value="PICKING">PICKING</option></select></div><div class="field"><label>Capacidade</label>')
+          old="$('tEnds').innerHTML=A.map(x=>'<tr><td><b>'+esc(x.codigo||'-')+'</b></td><td>'+esc(x.edificio||'-')+'</td><td>'+esc(x.status||'-')+'</td><td>'+Number(x.prioridade||0)+'</td><td>'+Number(x.capacidade||0)+'</td><td><button class=\"mini\" onclick=\"openEnd(\\\''+x.id+'\\\')\">Editar</button></td></tr>').join('')||empty(6);"
+          new="$('tEnds').innerHTML=A.map(x=>'<tr><td><b>'+esc(x.codigo||'-')+'</b></td><td>'+esc(x.edificio||'-')+'</td><td><span class=\"badge\">'+esc(x.tipo_endereco||'ESTOQUE')+'</span></td><td>'+esc(x.status||'-')+'</td><td>'+Number(x.prioridade||0)+'</td><td>'+Number(x.capacidade||0)+'</td><td><button class=\"mini\" onclick=\"openEnd(\\\''+x.id+'\\\')\">Editar</button></td></tr>').join('')||empty(7);"
+          if old not in s: raise SystemExit('render de enderecos nao encontrado')
+          s=s.replace(old,new)
+          old2="$('eEd').value=x?.edificio||'';$('eCap').value=x?.capacidade||0;"
+          new2="$('eEd').value=x?.edificio||'';$('eTipo').value=x?.tipo_endereco||'ESTOQUE';$('eCap').value=x?.capacidade||0;"
+          if old2 not in s: raise SystemExit('openEnd nao encontrado')
+          s=s.replace(old2,new2)
+          old3="edificio:$('eEd').value.trim()||null,capacidade:Number($('eCap').value||0)"
+          new3="edificio:$('eEd').value.trim()||null,tipo_endereco:$('eTipo').value,capacidade:Number($('eCap').value||0)"
+          if old3 not in s: raise SystemExit('saveEnd nao encontrado')
+          s=s.replace(old3,new3)
+          p.write_text(s)
+          PY
+      - name: Validar alteracao
+        run: |
+          grep -q 'id="eTipo"' index.html
+          grep -q "tipo_endereco" index.html
+      - name: Publicar
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add index.html
+          git commit -m 'Cadastro de endereços com ESTOQUE e PICKING [tipo-endereco-aplicado]'
+          git push
